@@ -12,7 +12,7 @@ check with your host for the correct php path
 /usr/local/bin/ea-php71 -c /home/USERNAME/public_html/SHOP/ADMINFOLDER/php.ini -q /home/USERNAME/public_html/SHOP/ADMINFOLDERS/backup_mysql_cron.php
 
 Changelog
-2019 02 27: extra debugging/error messages. script should be run from admin directory.
-2016 08 28: updated to cope with special chars in the database password 
-2008 - based on  http://www.zen-cart.com/forum/showthread.php?t=106666
+1.2 2019 02 27: extra debugging/error messages. script should be run from admin directory. Uploaded to plugins
+1.1 2016 08 28: updated to cope with special chars in the database password 
+1.0 2008 - based on  http://www.zen-cart.com/forum/showthread.php?t=106666
 
