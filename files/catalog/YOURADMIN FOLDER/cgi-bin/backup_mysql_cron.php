@@ -1,6 +1,7 @@
 <?php
+//place in /YOURSHOPFOLDER/YOURADMIN/FOLDER/cgi-bin/
 //backup database script for Zen Cart
-//torvista 27/02/2019
+//torvista 04/03/2019
 //based on http://www.zen-cart.com/forum/showthread.php?t=106666
 
 //INSTALLATION
@@ -12,22 +13,17 @@
 //DEBUGGING
 //false: default setting. Displays minimum confirmation text for cron result email.
 //true: for debugging. Note that it will show the MySQL database PASSWORD.
-$debug = true;
+$debug = false;
 
 //CONFIGURATION
-$admin_folder_name = 'admin1/';//put your admin folder name here, with a trailing slash
 
-//Hosting Server
-//enter the COMPLETE path to your shop directory
-$path_to_shop_remote = '/home/YOURUSERNAME/public_html/shop/';
-//enter the COMPLETE path to mysqldump executable
+//HOSTING - Production Server
+//enter the COMPLETE path to the mysqldump executable
 $mysqltool_remote = '/usr/bin/mysqldump';
 
-//Local/development Server
+//Local/Development Server
 //If you do not have a development server where you test modifications like this script, you are very silly indeed!
-//enter the COMPLETE path to your shop directory
-$path_to_shop_local = 'D:/SOMEPATH/YOURUSERNAME/public_html/SHOP/';
-//add the COMPLETE path to the mysqldump executable to this array. I used an array for different test environments
+//add the COMPLETE path to the mysqldump executable to this array. I used an array so it will work in different test environments
 $mysqltool_local =
     array(
         'c:/xampp.5.6.31/mysql/bin/mysqldump.exe',
@@ -36,7 +32,7 @@ $mysqltool_local =
         'c:/xampp.7.3.0/mysql/bin/mysqldump.exe'
     );
 /*****************************************************************************/
-//script needs timezone set for filename
+//script needs timezone set for correct date in backup filename
 if (date_default_timezone_get()) {
     date_default_timezone_set(date_default_timezone_get());
 } elseif (ini_get('date.timezone')) {
@@ -47,6 +43,8 @@ $error = false;
 $mysqltool = '';
 define('OS_DELIM_WIN', '"');
 define('OS_DELIM_NIX', "'");
+$slash = DIRECTORY_SEPARATOR;
+$path_to_admin = str_replace($slash . 'cgi-bin', '', __DIR__);
 (stristr(PHP_OS,
     "win") ? $os_delim = OS_DELIM_WIN : $os_delim = OS_DELIM_NIX);//when password has special chars, windows and *nix need different delimiters or you get a mysqldump error 2 when access is refused for the bad password
 //is script being run from the browser (so use html for display) or via cron (don't use html tags for more readable confirmation email)
@@ -123,13 +121,13 @@ if ($debug && !$cron_shell) { ?>
 <?php }
 
 if ($debug) {
-    echo 'Script called from ' . ($cron_shell ? 'cron/shell' : 'browser') . ".$lf";
+    echo 'Script called from a ' . ($cron_shell ? 'cron/shell' : 'browser') . ".$lf";
 }
 
 // check to see if "exec()" is disabled in PHP -- if so, won't be able to use this tool.
 $php_disabled_functions = @ini_get("disable_functions");
 if (in_array('exec', preg_split('/,/', str_replace(' ', '', $php_disabled_functions)))) {
-    echo "ERROR! exec not available: this script cannot run. $lf";
+    echo " $lf ERROR! exec not available: this script cannot run. $lf";
     echo "PHP directive: disable_functions=$php_disabled_functions $lf";
     echo "Contact your host for possible fixes.$lf";
     echo "eg. php.ini with disable_functions omitting exec in script directory. $lf";
@@ -139,16 +137,18 @@ if (in_array('exec', preg_split('/,/', str_replace(' ', '', $php_disabled_functi
 }
 
 //check if this is a local server
-if (file_exists($path_to_shop_local . $admin_folder_name . 'includes/local/configure.php')) {
-    require($path_to_shop_local . $admin_folder_name . 'includes/local/configure.php');
+if (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash . 'local' . $slash . 'configure.php')) {
+    //local server
+    require($configure_file);
     if ($debug) {
-        echo "Using includes/local/configure.php$lf";
+        echo "LOCAL: Using $configure_file $lf";
     }
+
     foreach ($mysqltool_local as $value) {
         if (file_exists($value)) {
             $mysqltool = $value;
             if ($debug) {
-                echo "mysqldump location=$mysqltool $lf";
+                echo "mysqldump found at:$mysqltool $lf";
             }
         }
         if ($mysqltool != '') {
@@ -157,10 +157,11 @@ if (file_exists($path_to_shop_local . $admin_folder_name . 'includes/local/confi
     }
 
 //check if this is the hosting server
-} elseif (file_exists($path_to_shop_remote  . $admin_folder_name . 'includes/configure.php')) {//on hosting, using cron, needs full path
-    require($path_to_shop_remote . $admin_folder_name . 'includes/configure.php');
+} elseif (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash . 'configure.php')) {//on hosting, using cron, needs full path
+//REMOTE
+    require($configure_file);
     if ($debug) {
-        echo "Using /includes/configure.php$lf";
+        echo "REMOTE: Using $configure_file $lf";
     }
 
     $mysqltool = $mysqltool_remote;
@@ -177,7 +178,8 @@ if (file_exists($path_to_shop_local . $admin_folder_name . 'includes/local/confi
 }
 
 if (!$error) {
-    $backup_path = DIR_FS_CATALOG . $admin_folder_name . 'backups/';
+
+    $backup_path = $path_to_admin . $slash . 'backups' . $slash;
     $backup_filename = 'db_' . DB_DATABASE . '-' . date('Y-m-d_H-i-s') . '_auto.sql';//name of the backup file
     $backup_dump = $backup_path . $backup_filename;
 
@@ -193,6 +195,7 @@ if (!$error) {
 
     $output = '';
     $return_dump = '';
+
     exec($command, $output, $return_dump);
 
     if ($return_dump === 0) {//success on 0
@@ -211,7 +214,9 @@ if (!$error) {
         echo "ERROR! BACKUP FILE NOT CREATED" . (!$debug ? ': set debug=true in cron script for details' : '') . $lf;
         if ($debug) {
             echo "command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
-            echo "exec return value ==$lf";var_dump($return_dump);echo $lf;
+            echo "exec return value ==$lf";
+            var_dump($return_dump);
+            echo $lf;
             echo "error messages=$lf";
             if (!$cron_shell) {
                 echo '<pre>';
