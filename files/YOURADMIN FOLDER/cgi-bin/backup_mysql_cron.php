@@ -23,10 +23,10 @@ $mysqltool_remote = '/usr/bin/mysqldump';
 //Local/Development Server
 //If you do not have a development server where you test modifications like this script, you are very silly indeed!
 //add the COMPLETE path to the mysqldump executable to this array. I used an array so it will work in different test environments
-$mysqltool_local = array(
+$mysqltool_local = [
     'c:/xampp.7.3.3/mysql/bin/mysqldump.exe',
     'C:/laragon/bin/mysql/mysql-8.0.27-winx64/bin/mysqldump.exe'
-);
+];
 /*****************************************************************************/
 //script needs timezone set for correct date in backup filename
 if (date_default_timezone_get()) {
@@ -43,12 +43,12 @@ const OS_DELIM_NIX = "'";
 $slash = DIRECTORY_SEPARATOR;
 $path_to_admin = str_replace($slash . 'cgi-bin', '', __DIR__);
 (stripos(PHP_OS_FAMILY, "win") !== false ? $os_delim = OS_DELIM_WIN
-    : $os_delim = OS_DELIM_NIX);//when password has special chars, windows and *nix need different delimiters or you get a mysqldump error 2 when access is refused for the bad password
+    : $os_delim = OS_DELIM_NIX);//when password has special chars, windows and *nix need different delimiters, or you get a mysqldump error 2 when access is refused for the bad password
 //is script being run from the browser (so use html for display) or via cron (don't use html tags for more readable confirmation email)
 $cron_shell = !isset($_SERVER['SERVER_NAME']);
 $lf = ($cron_shell ? "\n" : "<br>\n");//to avoid cron result email status being littered with html tags
 
-$redirect = '';//sends to other place IF debug not set also
+$redirect = '';//sends to another place IF debug not set also
 
 if (!$debug && $redirect) {
     ob_start();
@@ -61,11 +61,11 @@ if (!$debug && $redirect) {
  * http://www.php.net/manual/en/function.gzwrite.php#34955
  *
  * @param string  $source Path to file that should be compressed
- * @param integer $level GZIP compression level (default: 9)
+ * @param  int  $level GZIP compression level (default: 9)
  *
  * @return bool|string New filename (with .gz appended) if success, or false if operation fails
  */
-function gzCompressFile(string $source, int $level = 9)
+function gzCompressFile(string $source, int $level = 9): bool|string
 {
     global $debug, $lf;
     $dest = $source . '.gz';
@@ -216,7 +216,7 @@ if (!$error) {
 
     exec($command, $output, $return_dump);
 
-    if ($return_dump === 0) {//success on 0, which is an integer
+    if ($return_dump == 0) {//success on 0
         if ($debug) {
             echo "mysqdump executed$lf command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
             echo ".sql dumpfile created ok$lf";
@@ -261,7 +261,7 @@ if (!$error) {
         $backup_dump = gzCompressFile($backup_dump);
         if ($backup_dump === false) {//gzip not created
             echo "ERROR: .sql.gz file was NOT created from .sql dumpfile$lf";
-        } else { //all ok
+        } else { //all OK
             echo "gz file created ok: " . str_replace($backup_path, '', $backup_dump) . $lf . $lf;
             if ($debug) {
                 echo "Script Completed ok";

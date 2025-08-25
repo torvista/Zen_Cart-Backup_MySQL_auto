@@ -1,8 +1,8 @@
 # Zen Cart - Backup MySQL auto/cron
 Script to backup a Zen Cart database via a cron job.
 
-Compatible with all versions Zen Cart. Requires minimum php 7.4.  
-Since it uses only the admin version configure.php (local or production) from the Zen Cart fileset it should be compatible with any version.
+Compatible with all versions of Zen Cart. Requires minimum php 7.4.  
+Since it uses only the admin configure.php (local or production) from the Zen Cart fileset it should be compatible with any version.
 
 Install in /YOURSHOPFOLDER/YOURADMINFOLDER/cgi-bin/
 
@@ -23,7 +23,7 @@ https://github.com/torvista/Zen_Cart-Backup_MySQL_auto/issues
 
 ### cron examples
 
-Often a lot of trial and error is necessary. Check with your host for the correct php path to use
+Often a lot of trial and error is necessary to formulate the correct path/command to use on your server. Check with your host for the correct php path to use
 1) normal:
 /usr/local/bin/php -q /home/USERNAME/public_html/SHOP/ADMINFOLDER/cgi-bin/backup_mysql_cron.php
 
