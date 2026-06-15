@@ -1,8 +1,8 @@
-# Zen Cart - Backup MySQL auto/cron
+# Zen Cart - Backup MySQL auto/cron v1.6
 Script to backup a Zen Cart database via a cron job.
 
-Requires minimum php 7.4.  
-Since it uses only the admin configure.php (local or production) from the Zen Cart fileset it should be compatible with any version of Zen Cart.
+Requires minimum php 8.0.  
+Since it uses only the admin configure.php (local or production) and database_tables.php from the Zen Cart fileset it should be compatible with any version of Zen Cart.
 
 Install in /YOURSHOPFOLDER/YOURADMINFOLDER/cgi-bin/
 
@@ -10,20 +10,27 @@ You may test it from the browser:
 
 www.yourshopaddress/YOURADMINFOLDER/cgi-bin/backup_mysql_cron.php
 
-Maybe it will work out of the box, otherwise if errors occur, set $debug = true near the start of the script to debug.
+Maybe it will work out of the box, but probably you will have to modify/add the path to the mysqldump.exe which creates the backup file.
 
-Read the info in the script to help with possible changes you may have to make.
+If errors occur, add ?debug=1 to the url to show debug output.
 
-Probably the only thing you may have to modify will be the path to the mysqldump.exe, which creates the backup file.
+To speed up debugging, an option has been added to not create the backup file: add to the url ?no_dump=1
 
-Note that the browser may not show anything while it is processing, so appears to be hung: check the output folder to see if the .sql file has been created...
+READ THE INFO IN THE SCRIPT to help with possible changes you may have to make.
 
+Note that the browser may not show anything while it is processing a backup file, so appears to be hung: check the output folder to see if the .sql file has been created...
+
+## Sessions table
+This may be huge and is not of value for a restore, so an option has been added to not backup the data from that table: add to the url ?no_sessions=1  
+Or, use the override in the script to avoid having a parameter in the cron command.
+
+
+## Problems
 You may report issues in Github.
 
 https://github.com/torvista/Zen_Cart-Backup_MySQL_auto/issues
 
-
-### cron examples
+## cron examples
 
 Often a lot of trial and error is necessary to formulate the correct path/command to use on your server. Check with your host for the correct php path to use
 1) normal:
@@ -33,6 +40,9 @@ Often a lot of trial and error is necessary to formulate the correct path/comman
 /usr/local/bin/php -c /home/USERNAME/public_html/SHOP/ADMINFOLDER//cgi-bin/php.ini -q /home/USERNAME/public_html/SHOP/ADMINFOLDERS//cgi-bin/backup_mysql_cron.php
 
 ## Changelog
+
+1.6 - 2025 12 31: add option to not backup the sessions table, which can get bloated. Added parameters to urls.
+
 1.5 - 2025 12 08: better fix for mysql >8 --column-statistics=0 and maria, and a general spring-clean.
 
 1.4 - 2022 04 27: fix for mysql 8 --column-statistics=0, fix for gz file not being created/dumpfile .sql not being deleted, strict mode, compatible with php 8, more debugging info.

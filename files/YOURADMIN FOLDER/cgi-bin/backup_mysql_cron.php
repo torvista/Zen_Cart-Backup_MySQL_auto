@@ -2,33 +2,21 @@
 
 declare(strict_types=1);
 /**
- * Backup MySQL with a cron job
- * place this file in /YOURSHOPFOLDER/YOURADMIN/FOLDER/cgi-bin/
+ * Script to back up MySQL with a cron job
+ * place this file in /YOURSHOPADMINFOLDER/cgi-bin/
  *
  * @link https://github.com/torvista/Zen_Cart-Backup_MySQL_auto
- * forum thread: https://www.zen-cart.com/showthread.php/225138-Backup-MySQL-automatically-via-a-Cron-job
- * @license http://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
+ * @link https://www.zen-cart.com/showthread.php/225138-Backup-MySQL-automatically-via-a-Cron-job
+ * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @author torvista
- * @version 1.5
- * @updated 08 12 2025 torvista
+ * @version 1.6
+ * @updated 31 Dec 2025 torvista
+ *
  */
-
-// DEBUGGING
-// false: default setting. Displays minimum confirmation text for cron result email.
-// true: for debugging only. Note that it will show the MySQL database PASSWORD.
-$debug = false;
-
-if ($debug) {
-    ini_set('display_errors', '1');
-    ini_set('display_startup_errors', '1');
-    error_reporting(E_ALL);
-}
-
 // CONFIGURATION
-
-// Local/Development Server
-// enter the COMPLETE path to the mysqldump executable to this array.
-// There are multiple values so the same script will work on your production and test environment
+// Paths to mysqldump
+// Enter the COMPLETE path to the mysqldump executable in this array.
+// Use multiple values so the same script will work on both your production and test environments.
 $mysqltool_locations = [
     '/usr/bin/mysqldump',
     'c:/xampp.7.3.3/mysql/bin/mysqldump.exe',
@@ -36,14 +24,53 @@ $mysqltool_locations = [
     'c:/laragon/bin/mysql/mariadb-11.1.2-winx64/bin/mysqldump.exe',
 ];
 
-/*****************************************************************************/
+// The sessions table can grow very large. This data can be optionally omitted from the backup file.
+// use a url parameter: ...backup_mysql_cron.php?no_sessions=1
+$no_sessions = !empty($_GET['no_sessions']);
+// or override the url parameter
+//$no_sessions = true;
+
+// for the backup filename suffix...season to your taste
+$time_format = 'Y_m_d-T-H_i_s'; // 2025_12_31-CET-14_02_21
+
+// DEBUGGING:
+// debug = 0; default/live setting. Displays minimum confirmation text for the cron result email.
+// debug = 1/true/whatever; displays debugging info at each step, when executed from a browser. Note that it will show the MySQL database PASSWORD.
+// use a url parameter: ...backup_mysql_cron.php?debug=1
+$debug = !empty($_GET['debug']);
+// or override the url parameter
+//$debug = true;
+
+// For faster debugging, don't create the backup file
+// Use a url parameter: ...backup_mysql_cron.php?no_dump=1
+$no_dump = !empty($_GET['no_dump']);
+// or override the url parameter
+//$no_dump = true;
+
+/*******************************/
+
+if ($debug) {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+}
 
 // The script needs the timezone set to use the correct date in backup filename
 if (date_default_timezone_get()) {
     date_default_timezone_set(date_default_timezone_get());
+    if ($debug) {
+        echo 'date_default_timezone_get()=' . date_default_timezone_get() . PHP_EOL;
+    }
 } elseif (ini_get('date.timezone')) {
     date_default_timezone_set(ini_get('date.timezone'));
+    if ($debug) {
+        echo ': ini_get("date.timezone"=' . ini_get('date.timezone') . PHP_EOL;
+    }
 }
+
+//override server timezone
+date_default_timezone_set('Europe/Madrid');
+$current_time = date($time_format);
 
 // Initialise variables
 $error = false;
@@ -57,15 +84,69 @@ $path_to_admin = str_replace($slash . 'cgi-bin', '', __DIR__);
 // If password has special chars, windows and *nix need different delimiters, or you get a mysqldump error 2 when access is refused for the bad password
 $os_delim = stripos(PHP_OS_FAMILY, "win") !== false ? OS_DELIM_WIN : OS_DELIM_NIX;
 
-// Is script being run from the browser (then use html for display) or via cron (don't use html tags, for more readable confirmation email)
+// Is script being run from the browser (then use HTML for display) or via cron (don't use HTML tags, for a more readable confirmation email)
 $cron_shell = !isset($_SERVER['SERVER_NAME']);
-// Clean html tags from the cron result status email
+
+// Clean HTML tags from the cron result status email
 $lf = ($cron_shell ? "\n" : "<br>\n");
 
 $redirect = false;//sends to another place IF debug not set also
 
-if (!$debug && $redirect) {
-    ob_start();
+/**
+ * @return void
+ */
+function execute_dump(): void
+{
+    global $backup_dump_file, $backup_filename, $no_dump, $cron_shell, $debug, $dump_params, $error, $lf, $mysqltool;
+    if ($debug) {
+        echo __FUNCTION__ . $lf;
+    }
+    $command = $mysqltool . $dump_params;
+
+    $output = '';
+    $return_dump = '';
+
+    if ($debug) {
+        echo "mysqdump command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
+    }
+    if ($no_dump) {
+        echo '*.sql dumpfile NOT created ($no_dump=true)' . $lf;
+    } else {
+        exec($command, $output, $return_dump);
+
+        if ($return_dump == 0) {//success on 0
+            if ($debug) {
+                echo "*.sql dumpfile created$lf";
+            }
+
+            if (!file_exists($backup_dump_file)) {
+                $error = true;
+                echo "ERROR! .sql dumpfile NOT FOUND$lf";
+                if ($debug) {
+                    echo "$backup_filename $lf";
+                }
+            } elseif ($debug) {
+                echo "dumpfile exists:$lf $backup_dump_file $lf";
+            }
+        } else {//mysqldump returned an error
+            $error = true;
+            echo "ERROR: .sql dump file NOT CREATED" . (!$debug ? ': set debug=true in cron script for details' : '') . $lf;
+            if ($debug) {
+                echo "command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
+                echo "exec return value ==$lf";
+                var_dump($return_dump);
+                echo $lf;
+                echo "error messages=$lf";
+                if (!$cron_shell) {
+                    echo '<pre>';
+                }
+                print_r($output);//show any console error messages
+                if (!$cron_shell) {
+                    echo '</pre>';
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -123,24 +204,32 @@ function gzCompressFile(string $source, int $level = 9): bool|string
     return $dest;
 }
 
+if (!$debug && $redirect) {
+    ob_start();
+}
+
 if ($debug && !$cron_shell) { ?>
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta http-equiv="content-type" content="no-cache, no-store, must-revalidate"/>
+        <meta http-equiv="refresh" content="no-cache"/>
+        <!--<meta http-equiv="refresh" content="0"/>-->
+        <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
         <title>MySQL Backup Tool</title>
         <style>
             body {
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 12px;
+                font-family: Verdana, Arial, Helvetica, sans-serif;
+                font-size: 13px;
+                line-height: 18px;
             }
 
             h1 {
-                font-size: 14px;
+                font-size: 15px;
             }
 
             h2 {
-                font-size: 13px;
+                font-size: 14px;
             }
         </style>
     </head>
@@ -148,12 +237,12 @@ if ($debug && !$cron_shell) { ?>
     <h1>MySQL Backup Tool</h1>
     <h2>Debug ON</h2>
     <?php
-}
-if ($debug) {
-    echo 'Script called from a ' . ($cron_shell ? 'cron/shell' : 'browser') . ".$lf";
+    if ($debug) {
+        echo 'Script called from a ' . ($cron_shell ? 'cron/shell' : 'browser') . $lf;
+    }
 }
 
-// check to see if "exec()" is disabled in PHP -- if so, won't be able to use this tool.
+// check to see if 'exec()" is disabled in PHP -- if so, won't be able to use this tool.
 $php_disabled_functions = @ini_get("disable_functions");
 
 // check environment
@@ -172,10 +261,19 @@ if (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash 
     require($configure_file);
 } elseif (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash . 'configure.php')) {//on hosting, using cron, needs full path
     require($configure_file);
+} else {
+    die('configure.php NOT found');
 }
+if (file_exists(DIR_FS_CATALOG . 'includes/database_tables.php')) {
+    require(DIR_FS_CATALOG . 'includes/database_tables.php');
+} else {
+    die('database_tables.php not found at ' . DIR_FS_CATALOG . 'includes/database_tables.php');
+}
+
 if ($debug) {
-    echo "Using $configure_file $lf";
+    echo "configure.php=$configure_file $lf";
 }
+// Parse mysqldump paths to find the one on this server.
 foreach ($mysqltool_locations as $value) {
     if (file_exists($value)) {
         $mysqltool = $value;
@@ -183,98 +281,86 @@ foreach ($mysqltool_locations as $value) {
     }
 }
 if (empty($mysqltool)) {
-    die('ERROR: mysqldump.exe NOT FOUND.' . (!$debug ? ' Set debug=true in script for details.' : '') . $lf);
+    die('ERROR: mysqldump.exe NOT FOUND.' . (!$debug ? ' Set debug=true in script for more detail.' : '') . $lf);
 }
 
-$mysqli = new mysqli(DB_SERVER, DB_SERVER_USERNAME, DB_SERVER_PASSWORD, DB_DATABASE);;
+$mysqli = new mysqli(DB_SERVER, DB_SERVER_USERNAME, DB_SERVER_PASSWORD, DB_DATABASE);
 $version = $mysqli->server_info;
 $db_type = stripos($version, "MariaDB") !== false ? 'maria' : 'mysql';
 if ($db_type === 'mysql') {
     $mysql_version = mysqli_get_client_version();
 }
-if ($debug) {
-    echo "mysqldump found at: $mysqltool $lf";
-    echo "Database server=$version $lf";
-    echo($mysql_version > 0 ? "mysql version=$mysql_version . $lf" : '');
-}
 
 $backup_path = $path_to_admin . $slash . 'backups' . $slash;
-$backup_filename = 'db_' . DB_DATABASE . '-' . date('Y-m-d_H-i-s') . '_auto.sql';//name of the backup file
-$backup_dump = $backup_path . $backup_filename;
+$backup_filename = 'db_' . DB_DATABASE . '-' . $current_time . ($no_sessions ? '-no-sessions' : '') . '_auto.sql';
+$backup_dump_file = $backup_path . $backup_filename;
 
-$dump_params = '';
-//default parameter in mysqldump 8 onwards https://serverfault.com/questions/912162/mysqldump-throws-unknown-table-column-statistics-in-information-schema-1109
+if ($debug) {
+    echo 'Timezone=' . date_default_timezone_get() . ', ' . $current_time . ' (for dumpfile name)' . $lf;
+    echo "mysqldump exe=$mysqltool $lf";
+    echo "Database server=$version $lf";
+    echo ($mysql_version > 0 ? "mysql version=$mysql_version . $lf" : '');
+    echo '$backup_dump_file name =' . $backup_dump_file . $lf;
+    echo ($no_sessions ? '$no_sessions=true: data from table "' . TABLE_SESSIONS . '" will be omitted from the backup' . $lf : '');
+    echo ($no_dump ? '$no_dump=true: the backup file will not be created' . $lf : '');
+    echo '<hr>' . PHP_EOL;
+}
+
+$dump_params_base = ' "--host=' . DB_SERVER . '"';
+$dump_params_base .= ' ' . DB_DATABASE;
+$dump_params_base .= ' "--user=' . DB_SERVER_USERNAME . '"';
+$dump_params_base .= ' --password=' . $os_delim . DB_SERVER_PASSWORD . $os_delim;//NIX DEFINITELY needs single quotes around the filename when shell metacharacters *%&$& etc. are in the password
+$dump_params_base .= ' --complete-insert';
+$dump_params_base .= ' --opt';
+//$dump_params_base .= ' "--result-file=' . $backup_dump_file . '"';
+
+// Mysql: add default parameter for mysqldump 8 onwards https://serverfault.com/questions/912162/mysqldump-throws-unknown-table-column-statistics-in-information-schema-1109
 // maria does not have this parameter at all
 if ($db_type === 'mysql' && !str_starts_with((string)$mysql_version, '8')) {
-    $dump_params .= $mysql_version >= 8 ? ' --column-statistics=0 ' : '';
+    $dump_params_base .= $mysql_version >= 8 ? ' --column-statistics=0 ' : '';
 }
 
-$dump_params .= ' "--host=' . DB_SERVER . '"';
-$dump_params .= ' "--user=' . DB_SERVER_USERNAME . '"';
-$dump_params .= ' --password=' . $os_delim . DB_SERVER_PASSWORD . $os_delim;//NIX DEFINITELY needs single quotes around the filename when shell metacharacters *%&$& etc. are in the password
-$dump_params .= ' --opt';
-$dump_params .= ' --complete-insert';
-$dump_params .= ' "--result-file=' . $backup_dump . '"';
-$dump_params .= ' ' . DB_DATABASE;
-$dump_params .= " 2>&1";
-$command = $mysqltool . $dump_params;
-
-$output = '';
-$return_dump = '';
-
-exec($command, $output, $return_dump);
-
-if ($return_dump == 0) {//success on 0
+if ($no_sessions) {
+// First pass creates schema and data without the sessions table
+// Second pass adds the schema for the sessions table
+// Example code
+// mysqldump -u user -p db_name --ignore-table=db_name.table_to_omit > dump.sql
+// mysqldump -u user -p db_name table_to_omit --no-data >> dump.sql
     if ($debug) {
-        echo "mysqdump executed$lf command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
-        echo ".sql dumpfile created ok$lf";
+        echo "no sessions: first pass$lf";
     }
-
-    if (!file_exists($backup_dump)) {
-        $error = true;
-        echo "ERROR! .sql dumpfile NOT FOUND$lf";
-        if ($debug) {
-            echo "$backup_filename $lf";
-        }
-    } else {
-        if ($debug) {
-            echo "dumpfile exists:$lf $backup_dump $lf";
-        }
-    }
-} else {//mysqldump returned an error
-    $error = true;
-    echo "ERROR: .sql dump file NOT CREATED" . (!$debug ? ': set debug=true in cron script for details' : '') . $lf;
+    $dump_params = $dump_params_base . ' "--ignore-table=' . DB_DATABASE . '.' . TABLE_SESSIONS . '"';
+    $dump_params .= ' > "' . $backup_dump_file . '"';
+    execute_dump();
+// Second pass
     if ($debug) {
-        echo "command=$lf" . ($cron_shell ? $command : htmlspecialchars($command)) . $lf;
-        echo "exec return value ==$lf";
-        var_dump($return_dump);
-        echo $lf;
-        echo "error messages=$lf";
-        if (!$cron_shell) {
-            echo '<pre>';
-        }
-        print_r($output);//show any console error messages
-        if (!$cron_shell) {
-            echo '</pre>';
-        }
+        echo "no sessions: second pass$lf";
     }
-}
-
-//compress file
-if ($error) {
-    echo "gz file NOT created due to previous error$lf";
+    $dump_params = $dump_params_base . ' "' . TABLE_SESSIONS . '" --no-data';
+    $dump_params .= ' >> "' . $backup_dump_file . '"';
+    execute_dump();
 } else {
-    $backup_dump = gzCompressFile($backup_dump);
-    if ($backup_dump === false) {//gzip not created
-        echo "ERROR: .sql.gz file was NOT created from .sql dumpfile$lf";
-    } else { //all OK
-        echo "gz file created ok: " . str_replace($backup_path, '', $backup_dump) . $lf . $lf;
-        if ($debug) {
-            echo "Script Completed ok";
+    $dump_params = $dump_params_base . ' > "' . $backup_dump_file . '"';
+    execute_dump();
+}
+if (!$no_dump) {
+// Compress file
+    if ($error) {
+        echo "gz file NOT created due to previous error$lf";
+    } else {
+        $backup_dump_file = gzCompressFile($backup_dump_file);
+        if ($backup_dump_file === false) {//gzip not created
+            echo "ERROR: .sql.gz file was NOT created from .sql dumpfile$lf";
+        } else { //all OK
+            echo "gz file created ok: " . str_replace($backup_path, '', $backup_dump_file) . $lf . $lf;
+            if ($debug) {
+                echo "Script Completed OK<br><br>";
+            }
         }
     }
+} elseif ($debug) {
+    echo 'Script Completed with no dumpfile ($no_dump=true)<br><br>';
 }
-
 if (!$debug && $redirect) {
 // clear out the output buffer
     while (ob_get_status()) {
