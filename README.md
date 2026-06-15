@@ -41,6 +41,8 @@ Often a lot of trial and error is necessary to formulate the correct path/comman
 
 ## Changelog
 
+1.6 - 2026 06 15: use catalog configure.php (admin configure.php was dropped in ZC3+)
+
 1.6 - 2025 12 31: add option to not backup the sessions table, which can get bloated. Added parameters to urls.
 
 1.5 - 2025 12 08: better fix for mysql >8 --column-statistics=0 and maria, and a general spring-clean.

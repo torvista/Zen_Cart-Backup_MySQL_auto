@@ -9,15 +9,14 @@ declare(strict_types=1);
  * @link https://www.zen-cart.com/showthread.php/225138-Backup-MySQL-automatically-via-a-Cron-job
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @author torvista
- * @version 1.6
- * @updated 31 Dec 2025 torvista
+ * @version 15 June 2026 torvista
  *
  */
 // CONFIGURATION
 // Paths to mysqldump
 // Enter the COMPLETE path to the mysqldump executable in this array.
 // Use multiple values so the same script will work on both your production and test environments.
-$mysqltool_locations = [
+$mysqltool_possible_locations = [
     '/usr/bin/mysqldump',
     'c:/xampp.7.3.3/mysql/bin/mysqldump.exe',
     'c:/laragon/bin/mysql/mysql-8.0.27-winx64/bin/mysqldump.exe',
@@ -80,6 +79,7 @@ const OS_DELIM_WIN = '"';
 const OS_DELIM_NIX = "'";
 $slash = DIRECTORY_SEPARATOR;
 $path_to_admin = str_replace($slash . 'cgi-bin', '', __DIR__);
+$path_to_catalog= '..' . $slash . '..' . $slash . 'includes' . $slash;
 
 // If password has special chars, windows and *nix need different delimiters, or you get a mysqldump error 2 when access is refused for the bad password
 $os_delim = stripos(PHP_OS_FAMILY, "win") !== false ? OS_DELIM_WIN : OS_DELIM_NIX;
@@ -257,9 +257,9 @@ if (in_array('exec', explode(",", str_replace(' ', '', $php_disabled_functions))
 }
 
 // use correct configure.php
-if (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash . 'local' . $slash . 'configure.php')) {
+if (file_exists($configure_file = $path_to_catalog . 'local' . $slash . 'configure.php')) {
     require($configure_file);
-} elseif (file_exists($configure_file = $path_to_admin . $slash . 'includes' . $slash . 'configure.php')) {//on hosting, using cron, needs full path
+} elseif (file_exists($configure_file = $path_to_catalog . 'configure.php')) {
     require($configure_file);
 } else {
     die('configure.php NOT found');
@@ -274,7 +274,7 @@ if ($debug) {
     echo "configure.php=$configure_file $lf";
 }
 // Parse mysqldump paths to find the one on this server.
-foreach ($mysqltool_locations as $value) {
+foreach ($mysqltool_possible_locations as $value) {
     if (file_exists($value)) {
         $mysqltool = $value;
         break;
